@@ -3,15 +3,18 @@ from os import listdir
 from os.path import isfile, join
 from HTMLParser import HTMLParser
 from htmlentitydefs import name2codepoint
-import re
 import cPickle
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 
 class TestHTMLParser(HTMLParser):
 
     def __init__(self):
         HTMLParser.__init__(self)
-        self.output = []
+        self.output = {}
+        self.temp_output = []
         self.insideTable = False
         self.table_row_index = 0
         self.table_column_index = 0
@@ -50,15 +53,16 @@ class TestHTMLParser(HTMLParser):
 
     def handle_endtag(self, tag):
         if tag == 'table':
-            self.output.append(self.table)
+            self.temp_output.append(self.table)
             print self.table
-            cPickle.dump(self.table, open("test_table%d.pkl" % (len(self.output)), "wb"))
+            cPickle.dump(self.table, open("test_table%d.pkl" % (len(self.temp_output)), "wb"))
         if tag == 'tr':
             if self.table_row_index == 0:
                 self.table_column_count = self.table_column_index
             self.table_row_index += 1
         if tag == 'td':
             self.insideTable = False
+            self.handle_extra_columns()
             if len(self.table[self.table_column_index]) != self.table_row_index + 1:
                 self.append_table_data(' ')
             self.table_column_index += 1
@@ -69,7 +73,7 @@ class TestHTMLParser(HTMLParser):
         data = data.strip().decode('UTF-8')
         if not self.insideTable:
             if len(data) > 0:
-                self.output.append(data)
+                self.temp_output.append(data)
         else:
             if len(data) > 0:
                 if self.table_column_colspan > 0:
@@ -116,7 +120,8 @@ class TestHTMLParser(HTMLParser):
         # print "Decl     :", data
 
     def clear(self):
-        self.output = []
+        self.output = {}
+        self.temp_output = []
         self.insideTable = False
         self.table_row_index = 0
         self.table_column_index = 0
@@ -127,16 +132,16 @@ class TestHTMLParser(HTMLParser):
         self.table_column_rowspan = 0
         self.table_column_colspan = 0
 
+
 dataset_dir_path = "C:\Users\ProgrammerYuan\Downloads\FDDC_announcements_round1_test_a_20180524" \
                    "\FDDC_announcements_round1_test_a_20180524\holdmore\html"
 print(dataset_dir_path)
 files = [f for f in listdir(dataset_dir_path) if isfile(join(dataset_dir_path, f))]
-
 for file_name in files:
     with open(join(dataset_dir_path, file_name), 'r') as html_content:
         print file_name
         content = html_content.read()
         parser = TestHTMLParser()
         parser.feed(content)
-        cPickle.dump(parser.output, open(join('output/', file_name), 'wb'))
+        cPickle.dump(parser.temp_output, open(join('output/', file_name), 'wb'))
         parser.clear()
