@@ -1,10 +1,14 @@
 # coding:utf-8
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, join, isdir
 from HTMLParser import HTMLParser
 from htmlentitydefs import name2codepoint
-import cPickle
+
+import re
 import sys
+import json
+import argparse
+
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
@@ -55,7 +59,7 @@ class TestHTMLParser(HTMLParser):
         if tag == 'table':
             self.temp_output.append(self.table)
             print self.table
-            cPickle.dump(self.table, open("test_table%d.pkl" % (len(self.temp_output)), "wb"))
+            # cPickle.dump(self.table, open("test_table%d.pkl" % (len(self.temp_output)), "wb"))
         if tag == 'tr':
             if self.table_row_index == 0:
                 self.table_column_count = self.table_column_index
@@ -70,7 +74,7 @@ class TestHTMLParser(HTMLParser):
 
     def handle_data(self, data):
         # print "Data     :", re.sub('\s+', '', data)
-        data = data.strip().decode('UTF-8')
+        data = re.sub('\s+', '', data).decode('UTF-8')
         if not self.insideTable:
             if len(data) > 0:
                 self.temp_output.append(data)
@@ -133,15 +137,55 @@ class TestHTMLParser(HTMLParser):
         self.table_column_colspan = 0
 
 
-dataset_dir_path = "C:\Users\ProgrammerYuan\Downloads\FDDC_announcements_round1_test_a_20180524" \
-                   "\FDDC_announcements_round1_test_a_20180524\holdmore\html"
-print(dataset_dir_path)
-files = [f for f in listdir(dataset_dir_path) if isfile(join(dataset_dir_path, f))]
-for file_name in files:
-    with open(join(dataset_dir_path, file_name), 'r') as html_content:
-        print file_name
-        content = html_content.read()
-        parser = TestHTMLParser()
-        parser.feed(content)
-        cPickle.dump(parser.temp_output, open(join('output/', file_name), 'wb'))
-        parser.clear()
+def check_args_validity(parsed_args):
+    mode = parsed_args.mode
+    if mode == 'single':
+        if isdir(parsed_args.input_path) or isdir(parsed_args.output_path):
+            return False
+    else:
+        if isfile(parsed_args.input_path) or isfile(parsed_args.output_path):
+            return False
+    return True
+
+
+if __name__ == '__main__':
+
+    argparser = argparse.ArgumentParser(description='Program to convert html data into json form. '
+                                                    'This program works either in single mode or batch mode.'
+                                                    'Please be informed that in single mode, both input_path/'
+                                                    'output_path should be a file path.'
+                                                    'In Batch mode, both input_path/output_path should be a dir path.')
+    argparser.add_argument('input_path', help='path of input file/directory')
+    argparser.add_argument('output_path', help='path of output file/directory')
+    argparser.add_argument('--mode', nargs='?', choices=['single', 'batch'], default='single',
+                           help='which mode should this program works in')
+    args = argparser.parse_args()
+    print args
+    print check_args_validity(args)
+
+    if not check_args_validity(args):
+        argparser.print_help()
+        exit()
+
+    mode = args.mode
+    input_path = args.input_path
+    output_path = args.output_path
+
+    if mode == 'single':
+        with open(input_path, 'r') as html_content:
+            content = html_content.read()
+            parser = TestHTMLParser()
+            parser.feed(content)
+            json.dump(parser.temp_output, open(output_path, 'wb'), ensure_ascii=False,
+                      indent=4)
+            parser.clear()
+    else:
+        input_files = [f for f in listdir(input_path) if isfile(join(input_path, f))]
+        for file_name in input_files:
+            with open(join(input_path, file_name), 'r') as html_content:
+                content = html_content.read()
+                parser = TestHTMLParser()
+                parser.feed(content)
+                json.dump(parser.temp_output, open(join(output_path, file_name) + '.json', 'wb'),
+                          ensure_ascii=False, indent=4)
+                parser.clear()
